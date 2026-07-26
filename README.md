@@ -1,4 +1,4 @@
-# Fake Review Detector — Frontend + Backend
+# Evident — Frontend + Backend
 
 This turns your notebook (`DL_Fake_Review_Detection_Project_12.ipynb`) into a
 running web app:

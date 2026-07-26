@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Fake Review Detector — LSTM Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B0F14;
+    --panel:#121821;
+    --panel-2:#161D28;
+    --border:#232C38;
+    --text:#E8EDF2;
+    --muted:#8592A3;
+    --genuine:#2FD97B;
+    --fake:#FF5D5D;
+    --amber:#F2C94C;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:
+      radial-gradient(circle at 15% 0%, rgba(47,217,123,0.06), transparent 40%),
+      radial-gradient(circle at 85% 10%, rgba(255,93,93,0.05), transparent 35%),
+      var(--bg);
+    color:var(--text);
+    font-family:'Inter', sans-serif;
+    min-height:100vh;
+    padding-bottom:80px;
+  }
+  .wrap{max-width:1180px; margin:0 auto; padding:0 28px;}
+
+  /* ---------- Header ---------- */
+  header{
+    padding:36px 0 28px;
+    border-bottom:1px solid var(--border);
+    display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:16px;
+  }
+  .brand-eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px; letter-spacing:2px; text-transform:uppercase;
+    color:var(--muted);
+    margin-bottom:8px;
+  }
+  h1{
+    font-family:'Space Grotesk', sans-serif;
+    font-size:34px; font-weight:700; letter-spacing:-0.5px;
+  }
+  h1 span{color:var(--genuine);}
+  .status-pill{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    display:flex; align-items:center; gap:8px;
+    padding:8px 14px;
+    border:1px solid var(--border);
+    border-radius:999px;
+    background:var(--panel);
+  }
+  .dot{width:8px; height:8px; border-radius:50%; background:var(--muted);}
+  .dot.ok{background:var(--genuine); box-shadow:0 0 8px var(--genuine);}
+  .dot.bad{background:var(--fake); box-shadow:0 0 8px var(--fake);}
+  .dot.pending{background:var(--amber); animation:pulse 1.2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
+
+  /* ---------- Hero / Predictor ---------- */
+  .hero{
+    padding:44px 0 20px;
+    display:grid; grid-template-columns: 1.2fr 0.8fr; gap:32px;
+  }
+  @media (max-width: 860px){ .hero{grid-template-columns:1fr;} }
+
+  .predictor-card{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:28px;
+  }
+  .predictor-card h2{
+    font-family:'Space Grotesk', sans-serif;
+    font-size:20px; margin-bottom:6px;
+  }
+  .predictor-card p.desc{color:var(--muted); font-size:14px; margin-bottom:18px;}
+  textarea{
+    width:100%; min-height:120px;
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    border-radius:10px;
+    color:var(--text);
+    font-family:'Inter', sans-serif;
+    font-size:14px;
+    padding:14px;
+    resize:vertical;
+    outline:none;
+  }
+  textarea:focus{border-color:var(--genuine);}
+  .predict-btn{
+    margin-top:14px;
+    background:var(--genuine);
+    color:#08130D;
+    border:none;
+    font-family:'IBM Plex Mono', monospace;
+    font-weight:600;
+    font-size:13px;
+    letter-spacing:1px;
+    text-transform:uppercase;
+    padding:12px 22px;
+    border-radius:8px;
+    cursor:pointer;
+    transition:transform .12s ease, opacity .12s ease;
+  }
+  .predict-btn:hover{transform:translateY(-1px);}
+  .predict-btn:disabled{opacity:0.5; cursor:not-allowed;}
+  .predict-error{color:var(--fake); font-size:13px; margin-top:10px; font-family:'IBM Plex Mono', monospace;}
+
+  /* Verdict stamp */
+  .stamp-zone{
+    display:flex; align-items:center; justify-content:center;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:14px;
+    position:relative;
+    overflow:hidden;
+    min-height:220px;
+  }
+  .stamp-zone::before{
+    content:"";
+    position:absolute; inset:0;
+    background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.015) 0 2px, transparent 2px 14px);
+  }
+  .stamp{
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:700;
+    font-size:26px;
+    letter-spacing:2px;
+    text-transform:uppercase;
+    border:4px solid currentColor;
+    border-radius:10px;
+    padding:16px 24px;
+    transform:rotate(-8deg);
+    text-align:center;
+    opacity:0;
+    transition:opacity .25s ease, transform .25s ease;
+  }
+  .stamp.show{opacity:1; transform:rotate(-8deg) scale(1);}
+  .stamp.genuine{color:var(--genuine);}
+  .stamp.fake{color:var(--fake);}
+  .stamp .confidence{
+    display:block; font-family:'IBM Plex Mono', monospace;
+    font-size:12px; letter-spacing:1px; margin-top:6px; font-weight:500;
+  }
+  .stamp-placeholder{color:var(--muted); font-family:'IBM Plex Mono', monospace; font-size:13px; text-align:center; padding:0 20px;}
+
+  /* ---------- Sections ---------- */
+  section.block{padding:46px 0 0;}
+  .section-head{margin-bottom:20px;}
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px; color:var(--genuine); letter-spacing:2px; text-transform:uppercase; margin-bottom:6px;
+  }
+  .section-title{font-family:'Space Grotesk', sans-serif; font-size:24px; font-weight:600;}
+  .section-sub{color:var(--muted); font-size:14px; margin-top:6px; max-width:600px;}
+
+  .stat-row{
+    display:grid; grid-template-columns:repeat(4, 1fr); gap:16px; margin:22px 0 30px;
+  }
+  @media (max-width:760px){.stat-row{grid-template-columns:repeat(2,1fr);}}
+  .stat-card{
+    background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px;
+  }
+  .stat-card .label{font-size:12px; color:var(--muted); font-family:'IBM Plex Mono', monospace; margin-bottom:8px;}
+  .stat-card .value{font-family:'Space Grotesk', sans-serif; font-size:26px; font-weight:700;}
+
+  .graph-grid{
+    display:grid; grid-template-columns:1fr 1fr; gap:20px;
+  }
+  @media (max-width:860px){.graph-grid{grid-template-columns:1fr;}}
+  .graph-card{
+    background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px;
+  }
+  .graph-card h3{
+    font-family:'Space Grotesk', sans-serif; font-size:15px; font-weight:600; margin-bottom:10px;
+  }
+  .graph-card img{width:100%; border-radius:8px; display:block; background:#fff;}
+  .graph-card.wide{grid-column:1 / -1;}
+  .skeleton{
+    width:100%; height:220px; border-radius:8px;
+    background:linear-gradient(90deg, var(--panel-2) 25%, #1c2431 37%, var(--panel-2) 63%);
+    background-size:400% 100%;
+    animation:shimmer 1.4s ease infinite;
+  }
+  @keyframes shimmer{0%{background-position:100% 0;}100%{background-position:0 0;}}
+
+  table.report{
+    width:100%; border-collapse:collapse; font-family:'IBM Plex Mono', monospace; font-size:13px;
+  }
+  table.report th, table.report td{
+    text-align:left; padding:10px 12px; border-bottom:1px solid var(--border);
+  }
+  table.report th{color:var(--muted); font-weight:500; text-transform:uppercase; font-size:11px; letter-spacing:1px;}
+
+  footer{
+    margin-top:60px; padding-top:24px; border-top:1px solid var(--border);
+    color:var(--muted); font-size:12px; font-family:'IBM Plex Mono', monospace; text-align:center;
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div>
+      <div class="brand-eyebrow">LSTM · Binary Text Classifier</div>
+      <h1>Fake Review <span>Detector</span></h1>
+    </div>
+    <div class="status-pill" id="statusPill">
+      <span class="dot pending" id="statusDot"></span>
+      <span id="statusText">Connecting to backend…</span>
+    </div>
+  </header>
+
+  <!-- HERO / LIVE PREDICTOR -->
+  <div class="hero">
+    <div class="predictor-card">
+      <h2>Analyze a review</h2>
+      <p class="desc">Paste any product review below. The trained LSTM model will score it and flag it as genuine or fake.</p>
+      <textarea id="reviewInput" placeholder="e.g. This product is amazing and worth buying...">This product is amazing and worth buying</textarea>
+      <br/>
+      <button class="predict-btn" id="predictBtn">Analyze Review</button>
+      <div class="predict-error" id="predictError"></div>
+    </div>
+    <div class="stamp-zone">
+      <div class="stamp-placeholder" id="stampPlaceholder">Verdict will appear here once you analyze a review.</div>
+      <div class="stamp" id="stamp"></div>
+    </div>
+  </div>
+
+  <!-- DATASET OVERVIEW -->
+  <section class="block">
+    <div class="section-head">
+      <div class="eyebrow">01 · Dataset</div>
+      <div class="section-title">Dataset overview</div>
+      <p class="section-sub">Same cleaning steps as the notebook: duplicates dropped, text lower-cased, labels encoded.</p>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-card"><div class="label">Rows (after cleaning)</div><div class="value" id="statRows">—</div></div>
+      <div class="stat-card"><div class="label">Test Accuracy</div><div class="value" id="statAcc">—</div></div>
+      <div class="stat-card"><div class="label">Test Loss</div><div class="value" id="statLoss">—</div></div>
+      <div class="stat-card"><div class="label">Epochs Trained</div><div class="value" id="statEpochs">—</div></div>
+    </div>
+
+    <div class="graph-grid">
+      <div class="graph-card"><h3>Label Distribution</h3><div id="g_label_distribution" class="skeleton"></div></div>
+      <div class="graph-card"><h3>Rating Distribution</h3><div id="g_rating_distribution" class="skeleton"></div></div>
+      <div class="graph-card wide"><h3>Category Distribution</h3><div id="g_category_distribution" class="skeleton"></div></div>
+    </div>
+  </section>
+
+  <!-- TEXT ANALYSIS -->
+  <section class="block">
+    <div class="section-head">
+      <div class="eyebrow">02 · Text Signal</div>
+      <div class="section-title">Review length analysis</div>
+      <p class="section-sub">How review length is distributed, and whether it differs between genuine and fake reviews.</p>
+    </div>
+    <div class="graph-grid">
+      <div class="graph-card"><h3>Review Length Distribution</h3><div id="g_review_length_hist" class="skeleton"></div></div>
+      <div class="graph-card"><h3>Review Length by Label</h3><div id="g_boxplot_length_label" class="skeleton"></div></div>
+      <div class="graph-card wide"><h3>Correlation Heatmap</h3><div id="g_correlation_heatmap" class="skeleton"></div></div>
+    </div>
+  </section>
+
+  <!-- MODEL PERFORMANCE -->
+  <section class="block">
+    <div class="section-head">
+      <div class="eyebrow">03 · Model Performance</div>
+      <div class="section-title">Training &amp; evaluation</div>
+      <p class="section-sub">Accuracy/loss curves across epochs, plus confusion matrix and per-class report on the held-out test set.</p>
+    </div>
+    <div class="graph-grid">
+      <div class="graph-card"><h3>Training vs Validation Accuracy</h3><div id="g_accuracy_curve" class="skeleton"></div></div>
+      <div class="graph-card"><h3>Training vs Validation Loss</h3><div id="g_loss_curve" class="skeleton"></div></div>
+      <div class="graph-card"><h3>Confusion Matrix</h3><div id="g_confusion_matrix" class="skeleton"></div></div>
+      <div class="graph-card">
+        <h3>Classification Report</h3>
+        <div id="reportTableWrap"><div class="skeleton"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Backend: Flask + TensorFlow/Keras · Frontend: static HTML/CSS/JS · Reads live from your trained LSTM model
+  </footer>
+</div>
+
+<script>
+const API_BASE = "http://localhost:5000";
+
+const statusDot = document.getElementById('statusDot');
+const statusText = document.getElementById('statusText');
+
+function setStatus(state, text){
+  statusDot.className = 'dot ' + state;
+  statusText.textContent = text;
+}
+
+async function pollStatus(){
+  try{
+    const res = await fetch(`${API_BASE}/api/status`);
+    const data = await res.json();
+    if(data.ready){
+      setStatus('ok', 'Backend ready');
+      loadGraphs();
+      loadMetrics();
+    } else if(data.error){
+      setStatus('bad', 'Backend error — check terminal logs');
+    } else {
+      setStatus('pending', 'Model training… this can take a while on first run');
+      setTimeout(pollStatus, 4000);
+    }
+  }catch(err){
+    setStatus('bad', 'Cannot reach backend (is app.py running on :5000?)');
+    setTimeout(pollStatus, 5000);
+  }
+}
+
+function setGraph(id, base64src){
+  const el = document.getElementById(id);
+  el.outerHTML = `<img id="${id}" src="${base64src}" alt="${id}" />`;
+}
+
+async function loadGraphs(){
+  try{
+    const res = await fetch(`${API_BASE}/api/graphs`);
+    const data = await res.json();
+    if(data.error) return;
+    Object.keys(data).forEach(key => {
+      const elId = 'g_' + key;
+      if(document.getElementById(elId)) setGraph(elId, data[key]);
+    });
+  }catch(err){ console.error(err); }
+}
+
+async function loadMetrics(){
+  try{
+    const res = await fetch(`${API_BASE}/api/metrics`);
+    const data = await res.json();
+    if(data.error) return;
+
+    document.getElementById('statRows').textContent = data.dataset_rows ?? '—';
+    document.getElementById('statAcc').textContent = (data.test_accuracy*100).toFixed(2) + '%';
+    document.getElementById('statLoss').textContent = data.test_loss.toFixed(4);
+    document.getElementById('statEpochs').textContent = data.epochs;
+
+    const report = data.classification_report;
+    const classNames = data.class_names;
+    let rows = '';
+    classNames.forEach(cls => {
+      const r = report[cls];
+      if(!r) return;
+      rows += `<tr>
+        <td>${cls}</td>
+        <td>${(r.precision*100).toFixed(1)}%</td>
+        <td>${(r.recall*100).toFixed(1)}%</td>
+        <td>${(r["f1-score"]*100).toFixed(1)}%</td>
+        <td>${r.support}</td>
+      </tr>`;
+    });
+    const acc = report.accuracy;
+    document.getElementById('reportTableWrap').innerHTML = `
+      <table class="report">
+        <thead><tr><th>Class</th><th>Precision</th><th>Recall</th><th>F1</th><th>Support</th></tr></thead>
+        <tbody>${rows}
+          <tr><td>Overall Accuracy</td><td colspan="3">${(acc*100).toFixed(2)}%</td><td></td></tr>
+        </tbody>
+      </table>`;
+  }catch(err){ console.error(err); }
+}
+
+const predictBtn = document.getElementById('predictBtn');
+const reviewInput = document.getElementById('reviewInput');
+const predictError = document.getElementById('predictError');
+const stamp = document.getElementById('stamp');
+const stampPlaceholder = document.getElementById('stampPlaceholder');
+
+predictBtn.addEventListener('click', async () => {
+  const review = reviewInput.value.trim();
+  predictError.textContent = '';
+  if(!review){
+    predictError.textContent = 'Please enter a review to analyze.';
+    return;
+  }
+  predictBtn.disabled = true;
+  predictBtn.textContent = 'Analyzing…';
+  stamp.classList.remove('show');
+
+  try{
+    const res = await fetch(`${API_BASE}/api/predict`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({review})
+    });
+    const data = await res.json();
+    if(data.error){
+      predictError.textContent = data.error;
+    } else {
+      const isGenuine = data.prediction === 'Genuine Review';
+      stamp.className = 'stamp show ' + (isGenuine ? 'genuine' : 'fake');
+      stamp.innerHTML = (isGenuine ? 'Verified Genuine' : 'Flagged Fake') +
+        `<span class="confidence">confidence ${(data.confidence*100).toFixed(1)}%</span>`;
+      stampPlaceholder.style.display = 'none';
+    }
+  }catch(err){
+    predictError.textContent = 'Could not reach backend. Is app.py running?';
+  }finally{
+    predictBtn.disabled = false;
+    predictBtn.textContent = 'Analyze Review';
+  }
+});
+
+pollStatus();
+</script>
+
+</body>
+</html>

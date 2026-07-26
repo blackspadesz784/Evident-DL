@@ -14,6 +14,7 @@ backend/venv/
 *.joblib
 *.h5
 *.keras
+!cache/model.keras
 
 # Jupyter
 .ipynb_checkpoints/

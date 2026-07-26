@@ -42,3 +42,7 @@ dist/
 # Coverage
 .coverage
 htmlcov/
+
+data/
+train.py
+requirements-train.txt

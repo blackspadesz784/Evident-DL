@@ -74,7 +74,7 @@ python app.py
   inside `backend/cache/`. Every future run will just load the cache and start
   in a couple seconds — no retraining.
 - Keep this terminal window open — it's your API server running at
-  `http://localhost:5000`.
+  `https://evident-dl.onrender.com`.
 
 ## Step 5 — Open the frontend
 

@@ -28,8 +28,7 @@ Thumbs.db
 # Logs
 *.log
 
-# Cache
-.cache/
+
 
 # Python build
 build/
